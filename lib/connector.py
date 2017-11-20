@@ -17,6 +17,7 @@ from .error import ConfigError, AuthenticationError
 from .filter import DynamicException
 from .httpadapters import AdapterMap, retries
 from .version import VERSION
+from .vault import Vault
 
 LOG = logging.getLogger("lib/connector")
 
@@ -81,6 +82,7 @@ class BaseConnector(object):
         'dont_overwrite': {'order': 7, 'default': ""},
         'insert_only':    {'order': 8, 'default': "False"},
         'update_only':    {'order': 9, 'default': "False"},
+        'vault_keys':     {'order': 10, 'default': ""}
     }
 
     def __init__(self, section, settings):
@@ -93,6 +95,7 @@ class BaseConnector(object):
         self.__filter__ = None
         self.send_counter = 0
         self._session = None
+        self._vault = Vault(section)
 
         for key, value in settings.items():
             if key.startswith('mapping.'):
@@ -139,6 +142,39 @@ class BaseConnector(object):
 
         if section == 'oomnitza' and not BaseConnector.OomnitzaConnector:
             BaseConnector.OomnitzaConnector = self
+
+        self._preload_secrets()
+
+    def _get_secrets(self, keys=None):
+        """
+        Get secrets from vault for specified keys. Raises ``ConfigError``
+        if secret is missed in vault.
+        """
+        secrets = {}
+        if keys is not None:
+            for secret_key in keys:
+                secret_value = self._vault.get_secret(secret_key)
+                if secret_value:
+                    secrets[secret_key] = secret_value
+                else:
+                    raise ConfigError(
+                        "Unable to find secret in vault, ensure secret "
+                        "key/value pair has been inserted before starting "
+                        "connector:\n\t"
+                        "python vault.py --connector=%s --key=%s --value="
+                        % (self._vault._service_name, secret_key)
+                    )
+        return secrets
+
+    def _preload_secrets(self):
+        """
+        Load secrets from vault into connector settings.
+        """
+        vault_keys_string = self.settings['vault_keys']
+        vault_keys = vault_keys_string.split()
+        secrets = self._get_secrets(vault_keys)
+        for secret_key, secret_value in secrets.items():
+            self.settings[secret_key] = secret_value
 
     def get_field_mappings(self, extra_mappings):
         mappings = self.get_default_mappings()  # loads from Connector object or Oomnitza mapping api
