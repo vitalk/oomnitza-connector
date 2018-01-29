@@ -17,7 +17,7 @@ from .error import ConfigError, AuthenticationError
 from .filter import DynamicException
 from .httpadapters import AdapterMap, retries
 from .version import VERSION
-from .vault import Vault
+from .vault import Vault, VaultBackend
 
 LOG = logging.getLogger("lib/connector")
 
@@ -82,7 +82,8 @@ class BaseConnector(object):
         'dont_overwrite': {'order': 7, 'default': ""},
         'insert_only':    {'order': 8, 'default': "False"},
         'update_only':    {'order': 9, 'default': "False"},
-        'vault_keys':     {'order': 10, 'default': ""}
+        'vault_keys':     {'order': 10, 'default': ""},
+        'vault_backend':  {'order': 11, 'default': VaultBackend.KEYRING}
     }
 
     def __init__(self, section, settings):
@@ -95,7 +96,6 @@ class BaseConnector(object):
         self.__filter__ = None
         self.send_counter = 0
         self._session = None
-        self._vault = Vault(section)
 
         for key, value in settings.items():
             if key.startswith('mapping.'):
@@ -143,6 +143,8 @@ class BaseConnector(object):
         if section == 'oomnitza' and not BaseConnector.OomnitzaConnector:
             BaseConnector.OomnitzaConnector = self
 
+        vault_backend = settings.get('vault_backend')
+        self._vault = Vault(section, vault_backend)
         self._preload_secrets()
 
     def _get_secrets(self, keys=None):
