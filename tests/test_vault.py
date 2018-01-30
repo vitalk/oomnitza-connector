@@ -6,7 +6,6 @@ from mock import Mock
 from lib.vault import VaultKeyring, PasswordSetError, PasswordDeleteError
 
 
-@pytest.mark.wip
 class TestVaultKeyring:
 
     @pytest.fixture
